@@ -4,7 +4,7 @@
 # See https://github.com/actions/setup-python#caching-packages-dependencies
 
 # numpy 1.20.x does not support python 3.6
-numpy==1.19
+numpy==1.22.0
 pytest==7.1.0
 graphviz==0.19.1
 

@@ -11,7 +11,8 @@ import numpy as np
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
-from codec_datamodule import LibriTTSCodecDataModule
+# from codec_datamodule import LibriTTSCodecDataModule
+from eeg_datamodule import EEGDataModule
 from encodec import Encodec
 from lhotse.cut import Cut
 from lhotse.utils import fix_random_seed
@@ -758,12 +759,13 @@ def run(rank, world_size, args):
         device = torch.device("cuda", rank)
     logging.info(f"Device: {device}")
 
-    libritts = LibriTTSCodecDataModule(args)
+    # libritts = LibriTTSCodecDataModule(args)
+    data_module = EEGDataModule(args)
 
     if params.full_libri:
-        train_cuts = libritts.train_all_shuf_cuts()
+        train_cuts = data_module.train_all_shuf_cuts()
     else:
-        train_cuts = libritts.train_clean_100_cuts()
+        train_cuts = data_module.train_clean_100_cuts()
 
     logging.info(params)
 
@@ -857,14 +859,14 @@ def run(rank, world_size, args):
     if params.inf_check:
         register_inf_check_hooks(model)
 
-    train_dl = libritts.train_dataloaders(
+    train_dl = data_module.train_dataloaders(
         train_cuts,
         world_size=world_size,
         rank=rank,
     )
 
-    valid_cuts = libritts.dev_clean_cuts()
-    valid_dl = libritts.valid_dataloaders(
+    valid_cuts = data_module.dev_clean_cuts()
+    valid_dl = data_module.valid_dataloaders(
         valid_cuts,
         world_size=world_size,
         rank=rank,
@@ -950,7 +952,7 @@ def run(rank, world_size, args):
 
 def main():
     parser = get_parser()
-    LibriTTSCodecDataModule.add_arguments(parser)
+    EEGDataModule.add_arguments(parser)
     args = parser.parse_args()
     args.exp_dir = Path(args.exp_dir)
 

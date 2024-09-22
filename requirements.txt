@@ -21,3 +21,5 @@ flake8==5.0.4
 
 # cantonese word segment support
 pycantonese==3.4.0
+# export PYTHONPATH=/nvme3/lsz/bio_icefall:$PYTHONPATH
+# echo "export PYTHONPATH=/nvme3/lsz/bio_icefall:$PYTHONPATH" >> ~/.bashrc

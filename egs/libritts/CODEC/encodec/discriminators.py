@@ -84,9 +84,12 @@ class MultiScaleSTFTDiscriminator(nn.Module):
         n_filters: int,
         in_channels: int = 1,
         out_channels: int = 1,
-        n_ffts: List[int] = [1024, 2048, 512, 256, 128],
-        hop_lengths: List[int] = [256, 512, 128, 64, 32],
-        win_lengths: List[int] = [1024, 2048, 512, 256, 128],
+        # n_ffts: List[int] = [1024, 2048, 512, 256, 128],
+        # hop_lengths: List[int] = [256, 512, 128, 64, 32],
+        # win_lengths: List[int] = [1024, 2048, 512, 256, 128],
+        n_ffts: List[int] = [32, 64, 16, 8, 4],
+        hop_lengths: List[int] = [8, 16, 4, 2, 1],
+        win_lengths: List[int] = [32, 64, 16, 8, 4],
         **kwargs
     ):
         super().__init__()

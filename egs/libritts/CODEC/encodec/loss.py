@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from torchaudio.transforms import MelSpectrogram
+from torchaudio.transforms import MelSpectrogram, Spectrogram
 
 
 def adversarial_g_loss(y_disc_gen):
@@ -37,16 +37,18 @@ def reconstruction_loss(x, x_hat, args, eps=1e-7):
     # L += 0.01*loss_sisnr
     # 2^6=64 -> 2^10=1024
     # NOTE (lsx): add 2^11
-    for i in range(6, 12):
+    for i in range(6, 10):
         # for i in range(5, 12): # Encodec setting
-        s = 2**i
-        melspec = MelSpectrogram(
-            sample_rate=args.sampling_rate,
-            n_fft=max(s, 512),
+        s = (2 ** i) // 8
+        melspec = Spectrogram(
+            n_fft=s,
             win_length=s,
             hop_length=s // 4,
-            n_mels=64,
-            wkwargs={"device": x_hat.device},
+            window_fn=torch.hann_window,
+            normalized=True,
+            center=False,
+            pad_mode=None,
+            power=None,
         ).to(x_hat.device)
         S_x = melspec(x)
         S_x_hat = melspec(x_hat)

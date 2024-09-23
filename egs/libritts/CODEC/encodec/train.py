@@ -7,10 +7,14 @@ from pathlib import Path
 from shutil import copyfile
 from typing import Any, Dict, Optional, Tuple, Union
 
+import matplotlib.pyplot as plt
 import numpy as np
+import PIL
+import PIL.Image
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
+
 # from codec_datamodule import LibriTTSCodecDataModule
 from eeg_datamodule import EEGDataModule
 from encodec import Encodec
@@ -185,8 +189,8 @@ def get_params() -> AttributeDict:
             "log_interval": 50,
             "valid_interval": 200,
             "env_info": get_env_info(),
-            "sampling_rate": 24000,
-            "chunk_size": 1.0,  # in seconds
+            "sampling_rate": 128,
+            "chunk_size": 1,  # in seconds
             "lambda_adv": 1.0,  # loss scaling coefficient for adversarial loss
             "lambda_wav": 100.0,  # loss scaling coefficient for waveform loss
             "lambda_feat": 1.0,  # loss scaling coefficient for feat loss
@@ -252,18 +256,18 @@ def get_model(params: AttributeDict) -> nn.Module:
     from quantization import ResidualVectorQuantizer
 
     generator_params = {
-        "generator_n_filters": 32,
-        "dimension": 512,
+        "generator_n_filters": 16,
+        "dimension": 256,
         "ratios": [2, 2, 2, 4],
-        "target_bandwidths": [7.5, 15],
-        "bins": 1024,
+        "target_bandwidths": [2, 4, 6],
+        "bins": 256,
     }
     discriminator_params = {
-        "stft_discriminator_n_filters": 32,
+        "stft_discriminator_n_filters": 16,
         "discriminator_iter_start": 500,
     }
     inference_params = {
-        "target_bw": 7.5,
+        "target_bw": 6,
     }
 
     params.update(generator_params)
@@ -315,6 +319,10 @@ def prepare_input(
 ):
     """Parse batch data"""
     audio = batch["audio"].to(device, memory_format=torch.contiguous_format)
+    audio_mean = audio.mean()
+    audio_std = audio.std()
+    audio = (audio - audio_mean) / (audio_std + 1e-6)
+
     features = batch["features"].to(device, memory_format=torch.contiguous_format)
     audio_lens = batch["audio_lens"].to(device)
     features_lens = batch["features_lens"].to(device)
@@ -328,7 +336,7 @@ def prepare_input(
     else:
         # NOTE: a very coarse setup
         audio = audio[
-            :, params.sampling_rate : params.sampling_rate + params.sampling_rate
+            :, params.sampling_rate : (params.chunk_size + 1) * params.sampling_rate
         ]
 
     return audio, audio_lens, features, features_lens
@@ -517,20 +525,33 @@ def train_one_epoch(
 
                     speech_hat_i = speech_hat_[0]
                     speech_i = speech_[0]
+                    
                     if speech_hat_i.dim() > 1:
                         speech_hat_i = speech_hat_i.squeeze(0)
                         speech_i = speech_i.squeeze(0)
-                    tb_writer.add_audio(
-                        f"train/speech_hat_",
-                        speech_hat_i,
+                    # tb_writer.add_histogram(
+                    #     f"train/speech_hat_",
+                    #     speech_hat_i,
+                    #     params.batch_idx_train,
+                    # )
+                    # tb_writer.add_histogram(
+                    #     f"train/speech_",
+                    #     speech_i,
+                    #     params.batch_idx_train,
+                    # )
+                    # print(np.array(PIL.Image.open(gen_plot(speech_hat_i))).shape)
+                    # exit()
+                    tb_writer.add_image(
+                        "train/speech_hat_",
+                        np.array(PIL.Image.open(gen_plot(speech_hat_i))),
                         params.batch_idx_train,
-                        params.sampling_rate,
+                        dataformats="HWC",
                     )
-                    tb_writer.add_audio(
-                        f"train/speech_",
-                        speech_i,
+                    tb_writer.add_image(
+                        "train/speech_",
+                        np.array(PIL.Image.open(gen_plot(speech_i))),
                         params.batch_idx_train,
-                        params.sampling_rate,
+                        dataformats="HWC",
                     )
                     # tb_writer.add_image(
                     #     "train/mel_hat_",
@@ -572,17 +593,27 @@ def train_one_epoch(
                     if speech_hat_i.dim() > 1:
                         speech_hat_i = speech_hat_i.squeeze(0)
                         speech_i = speech_i.squeeze(0)
-                    tb_writer.add_audio(
+                    # tb_writer.add_histogram(
+                    #     f"train/valid_speech_hat_{index}",
+                    #     speech_hat_i,
+                    #     params.batch_idx_train,
+                    # )
+                    # tb_writer.add_histogram(
+                    #     f"train/valid_speech_{index}",
+                    #     speech_i,
+                    #     params.batch_idx_train,
+                    # )
+                    tb_writer.add_image(
                         f"train/valid_speech_hat_{index}",
-                        speech_hat_i,
+                        np.array(PIL.Image.open(gen_plot(speech_hat_i))),
                         params.batch_idx_train,
-                        params.sampling_rate,
+                        dataformats="HWC",
                     )
-                    tb_writer.add_audio(
+                    tb_writer.add_image(
                         f"train/valid_speech_{index}",
-                        speech_i,
+                        np.array(PIL.Image.open(gen_plot(speech_i))),
                         params.batch_idx_train,
-                        params.sampling_rate,
+                        dataformats="HWC",
                     )
 
     loss_value = tot_loss["generator_loss"] / tot_loss["samples"]
@@ -590,6 +621,21 @@ def train_one_epoch(
     if params.train_loss < params.best_train_loss:
         params.best_train_epoch = params.cur_epoch
         params.best_train_loss = params.train_loss
+
+
+def gen_plot(speech: torch.Tensor):
+    import io
+
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    plt.figure()
+    plt.plot(np.arange(128) / 128, speech.detach().cpu().numpy().T)
+    buf = io.BytesIO()
+    plt.savefig(buf, format="jpeg")
+    buf.seek(0)
+    plt.close()
+    return buf
 
 
 def compute_validation_loss(

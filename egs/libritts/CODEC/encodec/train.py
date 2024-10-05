@@ -256,18 +256,18 @@ def get_model(params: AttributeDict) -> nn.Module:
     from quantization import ResidualVectorQuantizer
 
     generator_params = {
-        "generator_n_filters": 16,
+        "generator_n_filters": 32,
         "dimension": 256,
-        "ratios": [2, 2, 2, 4],
-        "target_bandwidths": [2, 4, 6],
-        "bins": 256,
+        "ratios": [2, 2, 2],
+        "target_bandwidths": [1, 2],
+        "bins": 32,
     }
     discriminator_params = {
-        "stft_discriminator_n_filters": 16,
+        "stft_discriminator_n_filters": 32,
         "discriminator_iter_start": 500,
     }
     inference_params = {
-        "target_bw": 6,
+        "target_bw": 1,
     }
 
     params.update(generator_params)
@@ -280,6 +280,7 @@ def get_model(params: AttributeDict) -> nn.Module:
         * params.target_bandwidths[-1]
         // (math.ceil(params.sampling_rate / hop_length) * 10)
     )
+    n_q = 4
 
     encoder = SEANetEncoder(
         n_filters=params.generator_n_filters,
